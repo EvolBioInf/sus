@@ -7,6 +7,7 @@ all: $(EXE).go
 	go build $(EXE).go
 $(EXE).go: $(EXE).org
 	bash ../scripts/org2nw $(EXE).org | notangle -R$(EXE).go | gofmt > $(EXE).go
+	cp $(EXE).go ../
 test: $(EXE).go $(EXE)_test.go
 	go test -v
 $(EXE)_test.go: $(EXE).org
