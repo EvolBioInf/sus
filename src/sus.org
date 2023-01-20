@@ -1,0 +1,345 @@
+#+begin_src latex
+  \section{Introduction}
+  We are interested in comparing pairs of DNA sequences to, for example,
+  estimate the evolutionary distances between them. A useful quantity in
+  such comparisons is the length of the shortest unique substring found
+  in one sequence that is absent from the other. Let's call the two
+  sequences query, $q$, and subject, $s$. For every query suffix
+  $q[i..|q|]$ we concentrate on the length of its shortest prefix absent
+  from $s$. We call such prefixes \emph{shortest unique substrings} or
+  \emph{shustrings}. Let $X^\ast_i$ be the length of the shustring
+  starting at $q[i]$ and let $g$ be half the GC-content of $q$ and
+  $s$. Then the probability of finding a shustring of length $x$ or less
+  is~\cite{hau09:est}
+  \begin{equation}\label{eq:pro}
+    P\left\{X^\ast_i\le x\right\} =
+    \sum_{k=0}^x 2^x {x\choose k}
+    g^k\left(\frac{1}{2}-g\right)^{x-k}
+    \left(1-g^k\left(\frac{1}{2}-g\right)^{x-k}\right)^{|s|}.
+  \end{equation}
+
+  In the package \ty{sus} I implement equation~(\ref{eq:pro}) and use it
+  to calculate the probability function of shustring lengths. The solid
+  line in Figure~\ref{fig:pdf} shows an example for a 1 Mb subject with
+  GC content 0.5. This graph was plotted using the function
+  \ty{Prob}. The dashed line in Figure~\ref{fig:pdf} is the distribution
+  of shustring lengths observed in the equivalent simulated subject. The
+  expected and observed graph are indistinguishable, underscoring the
+  accuracy of equation~(\ref{eq:pro}). Based on \ty{Prob}, we can
+  further calculate quantiles of the probability
+  distribution. Figure~\ref{fig:pdf} shows the 5\% and 95\% quantiles as
+  two examples, which were computed with the function
+  \ty{Quantile}. Finally, Figure~\ref{fig:pdf} shows the mean shustring
+  length calculated with \ty{Mean}.
+
+  \begin{figure}
+    \begin{center}
+      \includegraphics{pdf}
+    \end{center}
+    \caption{Expected (\emph{exp}) and observed (simulated, \emph{obs})
+      probability density function of shustring lengths for a random 1
+      Mb subject sequence with GC content 0.5; the two distributions are
+      indistinguishable by eye; the three dotted vertical lines indicate
+      the 5\% quantile, the mean, and the 95\% quantile.}\label{fig:pdf}
+  \end{figure}
+
+  \section{Implementation}
+  The package \ty{sus} has hooks for imports and functions.
+#+end_src
+#+begin_src go <<sus.go>>=
+  package sus
+
+  import (
+	  //<<Imports>>
+  )
+
+  //<<Functions>>
+#+end_src
+#+begin_src latex
+  \subsection{\ty{Prob}: The Probability of Finding a Shustring of Given
+  Length}
+
+  !\ty{Prob} takes the length and GC content of the subject sequence and
+  !a shustring length as input, and returns the probability of finding
+  !a shustring of that length. The sequence length is understood
+  !as the length of just the forward strand, but matches may also occur
+  !on the reverse strand.
+
+  We first double the sequence length to include the reverse strand and
+  halve the GC-content to get $g$ in equation~(\ref{eq:pro}). Then we
+  declare two variables, $p_1$ and $p_2$. We calculate
+  \[
+  p_1=P\left\{X^\ast_i\le x-1\right\}
+  \]
+  and
+  \[
+  p_2=P\left\{X^\ast_i\le x\right\}
+  \]
+  and return the desired probability of finding a shustring of
+  length $x$, $p_2-p_1$.
+#+end_src
+#+begin_src go <<Functions>>=
+  func Prob(l int, g float64, x int) float64 {
+	  l *= 2
+	  g /= 2.0
+	  var p1, p2 float64
+	  //<<Calculate $p_1=P\{X^\ast_i\le x-1\}$>>
+	  //<<Calculate $p_2=P\{X^\ast_i\le x\}$>>
+	  return p2 - p1
+  }
+#+end_src
+#+begin_src latex
+  To calculate $p_1$, we transcribe the summation in
+  equation~(\ref{eq:pro}). The actual calculation of the terms summed is
+  delegated to the function \ty{pLen}.
+#+end_src
+#+begin_src go <<Calculate $p_1=P\{X^\ast_i\le x-1\}$>>=
+  for k := 0; k < x; k++ {
+	  p1 += pLen(l, g, x-1, k)
+  }
+#+end_src
+#+begin_src latex
+  In function \ty{pLen} we transcribe the multiplication in
+  equation~(\ref{eq:pro}) as a sum of log terms.
+#+end_src
+#+begin_src go <<Functions>>=
+  func pLen(l int, g float64, x, k int) float64 {
+	  l1 := ln(pow(2.0, x))
+	  l2 := ln(Bico(x, k))
+	  l3 := ln(pow(g, k))
+	  l4 := ln(pow(0.5-g, x-k))
+	  l5 := ln(pow(1.0-pow(g, k)*pow(0.5-g, x-k), l))
+	  return exp(l1 + l2 + l3 + l4 + l5)
+  }
+#+end_src
+#+begin_src latex
+  We implement the functions \ty{ln}, \ty{pow}, and \ty{exp} by calling
+  the corresponding library functions.
+#+end_src
+#+begin_src go <<Functions>>=
+  func ln(x float64) float64 {
+	  return math.Log(x)
+  }
+  func pow(x float64, y int) float64 {
+	  return math.Pow(x, float64(y))
+  }
+  func exp(x float64) float64 {
+	  return math.Exp(x)
+  }
+#+end_src
+#+begin_src latex
+  We import \ty{math}.
+#+end_src
+#+begin_src go <<Imports>>=
+  "math"
+#+end_src
+#+begin_src latex
+  We still have to implement the public function \ty{Bico} for
+  calculating the binomial coefficients in equation~(\ref{eq:pro}), but
+  before we do that, we conclude the implementation of \ty{Prob} by
+  calculating $p_2$. For this we again transcribe the summation in
+  equation~(\ref{eq:pro}).
+#+end_src
+#+begin_src go <<Calculate $p_2=P\{X^\ast_i\le x\}$>>=
+  for k := 0; k <= x; k++ {
+	  p2 += pLen(l, g, x, k)
+  }
+#+end_src
+#+begin_src latex
+  \subsection{\ty{Bico}: Binomial Coefficient}
+  !\ty{Bico} returns the binary coefficient n choose k.
+  We calculate bionomial coefficients by following~\cite[p. 167ff]{pre88:num}.
+#+end_src
+#+begin_src go <<Functions>>=
+  func Bico(n, k int) float64 {
+	  x := factln(n) - factln(k) - factln(n-k)
+	  return math.Floor(0.5 + exp(x))
+  }
+#+end_src
+#+begin_src latex
+  The function \ty{factln} returns $\log(n!)$. It stores the first 100
+  results for quick reuse.
+#+end_src
+#+begin_src go <<Functions>>=
+  var a [101]float64
+  func factln(n int) float64 {
+	  if (n < 0) {
+		  m := "Negative factorial in function factln."
+		  log.Fatal(m)
+	  }
+	  if (n <= 1) { return 0.0 }
+	  //<<Deal with $n=2,3,...,100$>>
+	  return gammln(float64(n+1))
+  }
+#+end_src
+#+begin_src latex
+  We import \ty{log}.
+#+end_src
+#+begin_src go <<Imports>>=
+  "log"
+#+end_src
+#+begin_src latex
+  If $n\le 100$, we try to look up the result. If it doesn't exist yet,
+  we compute it from scratch, store it, and return it.
+#+end_src
+#+begin_src go <<Deal with $n=2,3,...,100$>>=
+  if (n <= 100) {
+	  if a[n] > 0 {
+		  return a[n]
+	  } else {
+		  a[n] = gammln(float64(n+1))
+		  return a[n]
+	  }
+  }
+#+end_src
+#+begin_src latex
+  The function \ty{gammln} returns the value of $\log(\Gamma(n))$.
+#+end_src
+#+begin_src go <<Functions>>=
+  //<<Declare coefficients for calculating $\Gamma(n)$>>
+  func gammln(xx float64) float64 {
+	  x := xx - 1.0
+	  tmp := x + 5.5
+	  tmp -= (x + 0.5) * ln(tmp)
+	  ser := 1.0
+	  for j := 0; j <=5; j++ {
+		  x += 1.0
+		  ser += cof[j] / x
+	  }
+	  return -tmp + ln(2.50662827465 * ser)
+  }
+#+end_src
+#+begin_src latex
+  Six coefficients are needed for the computation of $\Gamma(n)$.
+#+end_src
+#+begin_src go <<Declare coefficients for calculating $\Gamma(n)$>>=
+  var cof = [6]float64{
+	  76.18009173,
+	  -86.50532033,
+	  24.01409822,
+	  -1.231739516,
+	  0.120858003e-2,
+	  -0.536382e-5}
+#+end_src
+#+begin_src latex
+  \subsection{\ty{Quantile}: Quantiles of the Shustring Length Probability
+    Distribution}
+  !\ty{Quantile} takes as input the length and GC content of the subject
+  !sequence and the $P$ value of the desired shustring length. It
+  !returns the corresponding shustring length.
+#+end_src
+#+begin_src go <<Functions>>=
+  func Quantile(l int, g, p float64) int {
+	  x := 1
+	  q := Prob(l, g, x)
+	  for q <= p {
+		  x++
+		  q += Prob(l, g, x)
+	  }
+	  return x
+  }
+#+end_src
+#+begin_src latex
+  \subsection{\ty{Mean}: Mean Shustring Length}
+  !\ty{Mean} takes as input the length and GC content of the subject
+  !sequence and returns the mean shustring length.
+  As usual when calculating the mean, we sum the lengths multiplied by
+  their probabilities.
+#+end_src
+#+begin_src go <<Functions>>=
+  func Mean(l int, g float64) float64 {
+	  var cp, m float64
+	  for x := 1; x < l; x++ {
+		  p := Prob(l, g, x)
+		  cp += p
+		  m += p * float64(x)
+		  if cp >= 1.0 - math.SmallestNonzeroFloat32 {
+			  break
+		  }
+	  }
+	  return m
+  }
+#+end_src
+#+begin_src latex
+  We're done writing \ty{sus}, time to test it.
+  \section{Testing}
+  Our testing code contains hooks for imports and the testing logic.
+#+end_src
+#+begin_src go <<sus_test.go>>=
+  package sus
+
+  import (
+	  "testing"
+	  //<<Testing imports>>
+  )
+
+  func TestSus(t *testing.T) {
+	  //<<Testing>>
+  }
+#+end_src
+#+begin_src latex
+  We test our four public functions, \ty{Bico}, \ty{Prob},
+  \ty{Quantile}, and \ty{Mean}.
+#+end_src
+#+begin_src go <<Testing>>=
+  //<<Test \ty{Bico}>>
+  //<<Test \ty{Prob}>>
+  //<<Test \ty{Quantile}>>
+  //<<Test \ty{Mean}>>
+#+end_src
+#+begin_src latex
+  We calculate ${25\choose 5}=53130$ and make sure the result we get is
+  the result we want.
+#+end_src
+#+begin_src go <<Test \ty{Bico}>>=
+  want := 53130.0
+  get := Bico(25, 5)
+  if get != want {
+	  t.Errorf("want: %d\nget: %d\n",
+		  int(want), int(get))
+  }
+#+end_src
+#+begin_src latex
+  We test \ty{Prob} by calculating the probability of finding a
+  shustring of length 11 in a 1 Mb subject with GC content 0.5.
+#+end_src
+#+begin_src go <<Test \ty{Prob}>>=
+  w := "0.472270"
+  le := 1000000
+  gc := 0.5
+  g := fmt.Sprintf("%1.6f", Prob(le, gc, 11))
+  if w != g {
+	  t.Errorf("want: %s\nget: %s\n", w, g)
+  }
+#+end_src
+#+begin_src latex
+  We import \ty{fmt}.
+#+end_src
+#+begin_src go <<Testing imports>>=
+  "fmt"
+#+end_src
+#+begin_src latex
+  We calculate the 5\% and 95\% quantile.
+#+end_src
+#+begin_src go <<Test \ty{Quantile}>>=
+  ge := Quantile(le, gc, 0.05)
+  wa := 10
+  if ge != wa {
+	  t.Errorf("get: %d; want: %d\n", ge, wa)
+  }
+  ge = Quantile(le, gc, 0.95)
+  wa = 13
+  if ge != wa {
+	  t.Errorf("get: %d; want: %d\n", ge, wa)
+  }
+#+end_src
+#+begin_src latex
+  We calculate the mean shustring length.
+#+end_src
+#+begin_src go <<Test \ty{Mean}>>=
+  w = "11.381942"
+  g = fmt.Sprintf("%2.6f", Mean(le, gc))
+  if g != w {
+	  t.Errorf("want: %s; get: %s\n", w, g)
+  }
+#+end_src

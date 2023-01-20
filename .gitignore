@@ -1,0 +1,11 @@
+*.go
+!sus.go
+doc/*.aux
+doc/*.dvi
+doc/*.log
+doc/*.pdf
+doc/*.toc
+doc/*.bbl
+doc/*.blg
+doc/susDoc.ps
+doc/sus.tex
