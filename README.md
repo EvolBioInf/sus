@@ -9,5 +9,5 @@ Calculate shortest unique substring lengths.
   texlive texlive-latex-extra texlive-science texlive-pstricks texlive-fonts-extra`  
 - Typeset the documentation  
   `$ make doc`  
-- This generates the file `doc/susDoc.pdf`
+  This generates the file `doc/susDoc.pdf`
 
