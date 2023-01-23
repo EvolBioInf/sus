@@ -1,3 +1,3 @@
-module github.com/evolbioinf/slen
+module github.com/evolbioinf/sus
 
 go 1.18
